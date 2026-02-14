@@ -1,0 +1,57 @@
+
+## OS artifacts
+.DS_Store
+Thumbs.db
+nul
+
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*venv/
+venv
+
+## IDE / editor configs
+.vscode/
+.idea/
+.cursor/
+.claude/
+.agents/
+dbt_project/.claude/
+
+## Credentials & secrets (NEVER commit)
+.env
+.env.*
+token.json
+cookies.txt
+streamlit_app/.streamlit/secrets.toml
+
+## Airflow files
+airflow_settings.yaml
+airflow-webserver.pid
+webserver_config.py
+airflow.cfg
+airflow.db
+astro
+
+## dbt project files
+dbt_project/logs/
+dbt_project/.user.yml
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/*venv/
+dbt_project/dbt.env
+package-lock.yml
+
+## Homework (not capstone)
+homework/dbt_project/.env
+homework/dbt_project/venv
+dbt_project/.env
+dbt_project/venv
+
+## Project specific
+include/test.txt
+logs/
+## project specific files
+include/test.txt

@@ -1,0 +1,490 @@
+version: 2
+
+models:
+  - name: int_nba__team_game_stats
+    description: >
+      Team-level game stats aggregated from player box scores.
+      Grain: one row per (game_date, game_id, team_id) — two rows per game.
+      Includes own stats, opponent stats, offensive/defensive rating,
+      and estimated possessions.
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+      - name: team_id
+        description: "BallDontLie unique team identifier."
+      - name: team_name
+        description: "Full team name (e.g. Boston Celtics)."
+      - name: season
+        description: "NBA season identifier (e.g. 2024)."
+      - name: is_home
+        description: "True if this team was the home team."
+      - name: home_team_score
+        description: "Final score of the home team."
+      - name: visitor_team_score
+        description: "Final score of the visiting team."
+      - name: score_margin
+        description: "Home team score minus visitor team score."
+      - name: total_points
+        description: "Combined score of both teams."
+      - name: is_postseason
+        description: "True if this was a playoff game."
+      - name: players_used
+        description: "Number of players who appeared in the game for this team."
+      - name: total_minutes
+        description: "Sum of all player minutes for this team."
+      - name: pts
+        description: "Total team points scored."
+      - name: reb
+        description: "Total team rebounds."
+      - name: oreb
+        description: "Total team offensive rebounds."
+      - name: dreb
+        description: "Total team defensive rebounds."
+      - name: ast
+        description: "Total team assists."
+      - name: stl
+        description: "Total team steals."
+      - name: blk
+        description: "Total team blocks."
+      - name: turnovers
+        description: "Total team turnovers."
+      - name: pf
+        description: "Total team personal fouls."
+      - name: fgm
+        description: "Total team field goals made."
+      - name: fga
+        description: "Total team field goals attempted."
+      - name: fg_pct
+        description: "Team field goal percentage (FGM / FGA)."
+      - name: fg3m
+        description: "Total team three-pointers made."
+      - name: fg3a
+        description: "Total team three-pointers attempted."
+      - name: fg3_pct
+        description: "Team three-point percentage (FG3M / FG3A)."
+      - name: ftm
+        description: "Total team free throws made."
+      - name: fta
+        description: "Total team free throws attempted."
+      - name: ft_pct
+        description: "Team free throw percentage (FTM / FTA)."
+      - name: est_possessions
+        description: "Estimated possessions: FGA + 0.475*FTA - OREB + TOV."
+      - name: efg_pct
+        description: "Effective field goal percentage: (FGM + 0.5*FG3M) / FGA. Dean Oliver's #1 Four Factor."
+      - name: tov_pct
+        description: "Turnover percentage: TOV / (FGA + 0.475*FTA - OREB + TOV). Dean Oliver's #2 Four Factor."
+      - name: ftr
+        description: "Free throw rate: FTA / FGA. Dean Oliver's #4 Four Factor."
+      - name: orb_pct
+        description: "Offensive rebound percentage: OREB / (OREB + opponent DREB). Dean Oliver's #3 Four Factor."
+      - name: off_rating
+        description: "Points per 100 possessions."
+      - name: def_rating
+        description: "Opponent points per 100 possessions."
+      - name: opp_efg_pct
+        description: "Opponent's effective field goal percentage (what opponents shoot against this team's defense)."
+      - name: opp_tov_pct
+        description: "Opponent's turnover percentage (turnovers forced by this team's defense)."
+      - name: opp_ftr
+        description: "Opponent's free throw rate (fouls committed by this team's defense)."
+      - name: opp_orb_pct
+        description: "Opponent's offensive rebound percentage (offensive boards allowed by this team's defense)."
+      - name: opp_team_id
+        description: "Opponent team identifier."
+      - name: opp_team_name
+        description: "Opponent full team name."
+      - name: opp_pts
+        description: "Points scored by the opponent."
+
+  - name: int_nba__consensus_lines
+    description: >
+      Consensus (median) betting lines across all bookmakers.
+      Grain: one row per (game_date, event_id, market_key, side).
+      Tracks median price/line, best/worst price, and line range.
+    columns:
+      - name: game_date
+        description: "Date the game is scheduled (Eastern time)."
+      - name: event_id
+        description: "The Odds API unique event identifier."
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: home_team
+        description: "Normalized home team name."
+      - name: away_team
+        description: "Normalized away team name."
+      - name: commence_time_utc
+        description: "Scheduled game start time in UTC."
+      - name: commence_time_et
+        description: "Scheduled game start time in Eastern."
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+      - name: side
+        description: "Bet side: team name (h2h/spreads) or Over/Under (totals)."
+      - name: num_bookmakers
+        description: "Count of bookmakers offering this line."
+      - name: consensus_price
+        description: "Median American odds across all bookmakers."
+      - name: consensus_line
+        description: "Median point spread or total line. NULL for h2h."
+      - name: best_price
+        description: "Best (lowest-vig) American odds among all bookmakers."
+      - name: worst_price
+        description: "Worst (highest-vig) American odds among all bookmakers."
+      - name: min_line
+        description: "Smallest point spread or total line across bookmakers."
+      - name: max_line
+        description: "Largest point spread or total line across bookmakers."
+      - name: consensus_implied_prob
+        description: "Median implied probability across all bookmakers."
+
+  - name: int_nba__game_betting_results
+    description: >
+      Completed games joined with consensus lines to determine
+      cover/push/miss outcomes for every bet type.
+      Grain: one row per (game_date, game_id, market_key, side).
+      Links Odds API to BDL via (game_date, home_team) natural key.
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+      - name: event_id
+        description: "The Odds API unique event identifier."
+      - name: season
+        description: "NBA season identifier."
+      - name: home_team_name
+        description: "Full home team name."
+      - name: visitor_team_name
+        description: "Full visiting team name."
+      - name: home_team_score
+        description: "Final score of the home team."
+      - name: visitor_team_score
+        description: "Final score of the visiting team."
+      - name: score_margin
+        description: "Home team score minus visitor team score."
+      - name: total_points
+        description: "Combined score of both teams."
+      - name: is_postseason
+        description: "True if this was a playoff game."
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+      - name: side
+        description: "Bet side: team name (h2h/spreads) or Over/Under (totals)."
+      - name: consensus_line
+        description: "Median point spread or total line used for cover evaluation."
+      - name: consensus_price
+        description: "Median American odds for this line."
+      - name: consensus_implied_prob
+        description: "Median implied probability for this line."
+      - name: num_bookmakers
+        description: "Count of bookmakers contributing to the consensus."
+      - name: best_price
+        description: "Best American odds available across bookmakers."
+      - name: cover_result
+        description: "COVERED, MISSED, or PUSH for this bet."
+
+  - name: int_nba__team_rolling_stats
+    description: >
+      Per-team rolling averages: L10 (last 10 games) and season-to-date.
+      Window frames exclude current game (1 PRECEDING) so values represent
+      pre-game expectations. Powers predictions and game grades.
+      Grain: one row per (game_date, game_id, team_id).
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+      - name: team_id
+        description: "BallDontLie unique team identifier."
+      - name: team_name
+        description: "Full team name."
+      - name: season
+        description: "NBA season identifier."
+      - name: is_home
+        description: "True if this team was the home team."
+      - name: opp_team_id
+        description: "Opponent team identifier."
+      - name: opp_team_name
+        description: "Opponent full team name."
+      - name: season_game_number
+        description: "Sequential game number within the season for this team."
+      # Current game actuals
+      - name: pts
+        description: "Team points scored in this game."
+      - name: opp_pts
+        description: "Opponent points scored in this game."
+      - name: reb
+        description: "Team rebounds in this game."
+      - name: oreb
+        description: "Team offensive rebounds in this game."
+      - name: dreb
+        description: "Team defensive rebounds in this game."
+      - name: ast
+        description: "Team assists in this game."
+      - name: turnovers
+        description: "Team turnovers in this game."
+      - name: stl
+        description: "Team steals in this game."
+      - name: blk
+        description: "Team blocks in this game."
+      - name: pf
+        description: "Team personal fouls in this game."
+      - name: fgm
+        description: "Team field goals made in this game."
+      - name: fga
+        description: "Team field goals attempted in this game."
+      - name: fg_pct
+        description: "Team field goal percentage in this game."
+      - name: fg3m
+        description: "Team three-pointers made in this game."
+      - name: fg3a
+        description: "Team three-pointers attempted in this game."
+      - name: fg3_pct
+        description: "Team three-point percentage in this game."
+      - name: ftm
+        description: "Team free throws made in this game."
+      - name: fta
+        description: "Team free throws attempted in this game."
+      - name: ft_pct
+        description: "Team free throw percentage in this game."
+      - name: est_possessions
+        description: "Estimated possessions in this game."
+      - name: efg_pct
+        description: "Effective field goal percentage in this game."
+      - name: tov_pct
+        description: "Turnover percentage in this game."
+      - name: orb_pct
+        description: "Offensive rebound percentage in this game."
+      - name: ftr
+        description: "Free throw rate in this game."
+      - name: off_rating
+        description: "Offensive rating (points per 100 possessions) in this game."
+      - name: def_rating
+        description: "Defensive rating (opponent points per 100 possessions) in this game."
+      - name: opp_efg_pct
+        description: "Opponent effective field goal percentage in this game."
+      - name: opp_tov_pct
+        description: "Opponent turnover percentage in this game."
+      - name: opp_orb_pct
+        description: "Opponent offensive rebound percentage in this game."
+      - name: opp_ftr
+        description: "Opponent free throw rate in this game."
+      - name: score_margin
+        description: "Home team score minus visitor team score in this game."
+      - name: total_points
+        description: "Combined score of both teams in this game."
+      - name: rest_days
+        description: "Days since this team's previous game. NULL for the first game of the season."
+      # L10 rolling averages
+      - name: l10_avg_pts
+        description: "L10 rolling average points (before this game)."
+      - name: l10_avg_opp_pts
+        description: "L10 rolling average opponent points (before this game)."
+      - name: l10_avg_reb
+        description: "L10 rolling average rebounds (before this game)."
+      - name: l10_avg_ast
+        description: "L10 rolling average assists (before this game)."
+      - name: l10_avg_turnovers
+        description: "L10 rolling average turnovers (before this game)."
+      - name: l10_avg_stl
+        description: "L10 rolling average steals (before this game)."
+      - name: l10_avg_blk
+        description: "L10 rolling average blocks (before this game)."
+      - name: l10_avg_fg_pct
+        description: "L10 rolling average field goal percentage (before this game)."
+      - name: l10_avg_fg3_pct
+        description: "L10 rolling average three-point percentage (before this game)."
+      - name: l10_avg_ft_pct
+        description: "L10 rolling average free throw percentage (before this game)."
+      - name: l10_avg_possessions
+        description: "L10 rolling average possessions (before this game)."
+      - name: l10_avg_off_rating
+        description: "L10 rolling average offensive rating (before this game)."
+      - name: l10_avg_def_rating
+        description: "L10 rolling average defensive rating (before this game)."
+      - name: l10_avg_pf
+        description: "L10 rolling average personal fouls (before this game)."
+      # L10 Four Factors rolling averages
+      - name: l10_avg_efg_pct
+        description: "L10 rolling average effective field goal percentage (before this game)."
+      - name: l10_avg_tov_pct
+        description: "L10 rolling average turnover percentage (before this game)."
+      - name: l10_avg_orb_pct
+        description: "L10 rolling average offensive rebound percentage (before this game)."
+      - name: l10_avg_ftr
+        description: "L10 rolling average free throw rate (before this game)."
+      - name: l10_avg_opp_efg_pct
+        description: "L10 rolling average opponent eFG% — what opponents shoot against this team (before this game)."
+      - name: l10_avg_opp_tov_pct
+        description: "L10 rolling average opponent TO% — turnovers forced by this team (before this game)."
+      - name: l10_avg_opp_orb_pct
+        description: "L10 rolling average opponent ORB% — offensive boards allowed by this team (before this game)."
+      - name: l10_avg_opp_ftr
+        description: "L10 rolling average opponent FTR — free throw rate allowed by this team (before this game)."
+      # Season-to-date averages
+      - name: season_avg_pts
+        description: "Season-to-date average points (before this game)."
+      - name: season_avg_opp_pts
+        description: "Season-to-date average opponent points (before this game)."
+      - name: season_avg_reb
+        description: "Season-to-date average rebounds (before this game)."
+      - name: season_avg_ast
+        description: "Season-to-date average assists (before this game)."
+      - name: season_avg_turnovers
+        description: "Season-to-date average turnovers (before this game)."
+      - name: season_avg_stl
+        description: "Season-to-date average steals (before this game)."
+      - name: season_avg_blk
+        description: "Season-to-date average blocks (before this game)."
+      - name: season_avg_fg_pct
+        description: "Season-to-date average field goal percentage (before this game)."
+      - name: season_avg_fg3_pct
+        description: "Season-to-date average three-point percentage (before this game)."
+      - name: season_avg_ft_pct
+        description: "Season-to-date average free throw percentage (before this game)."
+      - name: season_avg_possessions
+        description: "Season-to-date average possessions (before this game)."
+      - name: season_avg_off_rating
+        description: "Season-to-date average offensive rating (before this game)."
+      - name: season_avg_def_rating
+        description: "Season-to-date average defensive rating (before this game)."
+      - name: season_avg_pf
+        description: "Season-to-date average personal fouls (before this game)."
+      # Season Four Factors averages
+      - name: season_avg_efg_pct
+        description: "Season-to-date average effective field goal percentage (before this game)."
+      - name: season_avg_tov_pct
+        description: "Season-to-date average turnover percentage (before this game)."
+      - name: season_avg_orb_pct
+        description: "Season-to-date average offensive rebound percentage (before this game)."
+      - name: season_avg_ftr
+        description: "Season-to-date average free throw rate (before this game)."
+      - name: season_avg_opp_efg_pct
+        description: "Season-to-date average opponent eFG% (before this game)."
+      - name: season_avg_opp_tov_pct
+        description: "Season-to-date average opponent TO% (before this game)."
+      - name: season_avg_opp_orb_pct
+        description: "Season-to-date average opponent ORB% (before this game)."
+      - name: season_avg_opp_ftr
+        description: "Season-to-date average opponent FTR (before this game)."
+
+  - name: int_nba__player_rolling_stats
+    description: >
+      Per-player rolling averages: L10 and season-to-date.
+      Window frames exclude current game (1 PRECEDING) so values represent
+      pre-game expectations. Includes Hollinger Game Score.
+      Only players with minutes > 0. Powers player game grades.
+      Grain: one row per (game_date, game_id, player_id).
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+      - name: player_id
+        description: "BallDontLie unique player identifier."
+      - name: player_name
+        description: "Full player name."
+      - name: team_id
+        description: "BallDontLie unique team identifier."
+      - name: team_name
+        description: "Full team name."
+      - name: season
+        description: "NBA season identifier."
+      - name: is_home
+        description: "True if the player's team was the home team."
+      - name: season_game_number
+        description: "Sequential game number within the season for this player."
+      # Current game actuals
+      - name: minutes_played
+        description: "Minutes played in this game."
+      - name: pts
+        description: "Points scored in this game."
+      - name: reb
+        description: "Total rebounds in this game."
+      - name: oreb
+        description: "Offensive rebounds in this game."
+      - name: dreb
+        description: "Defensive rebounds in this game."
+      - name: ast
+        description: "Assists in this game."
+      - name: stl
+        description: "Steals in this game."
+      - name: blk
+        description: "Blocks in this game."
+      - name: turnovers
+        description: "Turnovers in this game."
+      - name: pf
+        description: "Personal fouls in this game."
+      - name: fgm
+        description: "Field goals made in this game."
+      - name: fga
+        description: "Field goals attempted in this game."
+      - name: fg3m
+        description: "Three-pointers made in this game."
+      - name: fg3a
+        description: "Three-pointers attempted in this game."
+      - name: ftm
+        description: "Free throws made in this game."
+      - name: fta
+        description: "Free throws attempted in this game."
+      - name: game_score
+        description: "Hollinger Game Score for this game."
+      - name: fg_pct
+        description: "Field goal percentage in this game (FGM / FGA)."
+      - name: fg3_pct
+        description: "Three-point percentage in this game (FG3M / FG3A)."
+      - name: ft_pct
+        description: "Free throw percentage in this game (FTM / FTA)."
+      # L10 rolling averages
+      - name: l10_avg_game_score
+        description: "L10 rolling average Game Score (before this game)."
+      - name: l10_avg_pts
+        description: "L10 rolling average points (before this game)."
+      - name: l10_avg_reb
+        description: "L10 rolling average rebounds (before this game)."
+      - name: l10_avg_ast
+        description: "L10 rolling average assists (before this game)."
+      - name: l10_avg_stl
+        description: "L10 rolling average steals (before this game)."
+      - name: l10_avg_blk
+        description: "L10 rolling average blocks (before this game)."
+      - name: l10_avg_turnovers
+        description: "L10 rolling average turnovers (before this game)."
+      - name: l10_avg_pf
+        description: "L10 rolling average personal fouls (before this game)."
+      - name: l10_avg_fg_pct
+        description: "L10 rolling average field goal percentage (before this game)."
+      - name: l10_avg_fg3_pct
+        description: "L10 rolling average three-point percentage (before this game)."
+      - name: l10_avg_ft_pct
+        description: "L10 rolling average free throw percentage (before this game)."
+      - name: l10_avg_minutes_played
+        description: "L10 rolling average minutes played (before this game)."
+      # Season-to-date averages
+      - name: season_avg_game_score
+        description: "Season-to-date average Game Score (before this game)."
+      - name: season_avg_pts
+        description: "Season-to-date average points (before this game)."
+      - name: season_avg_reb
+        description: "Season-to-date average rebounds (before this game)."
+      - name: season_avg_ast
+        description: "Season-to-date average assists (before this game)."
+      - name: season_avg_stl
+        description: "Season-to-date average steals (before this game)."
+      - name: season_avg_blk
+        description: "Season-to-date average blocks (before this game)."
+      - name: season_avg_turnovers
+        description: "Season-to-date average turnovers (before this game)."
+      - name: season_avg_pf
+        description: "Season-to-date average personal fouls (before this game)."
+      - name: season_avg_fg_pct
+        description: "Season-to-date average field goal percentage (before this game)."
+      - name: season_avg_fg3_pct
+        description: "Season-to-date average three-point percentage (before this game)."
+      - name: season_avg_ft_pct
+        description: "Season-to-date average free throw percentage (before this game)."
+      - name: season_avg_minutes_played
+        description: "Season-to-date average minutes played (before this game)."

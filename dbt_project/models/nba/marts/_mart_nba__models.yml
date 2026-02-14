@@ -1,0 +1,705 @@
+version: 2
+
+models:
+  - name: mart_nba__game_results
+    description: >
+      Central fact table of completed NBA games with final scores
+      and all betting outcomes (spread, moneyline, total).
+      Grain: one row per (game_date, game_id).
+      Powers the Game Results and historical analysis pages.
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+      - name: game_date
+        description: "Date the game was played."
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: home_team_name
+        description: "Full name of the home team."
+      - name: visitor_team_name
+        description: "Full name of the visiting team."
+      - name: home_team_score
+        description: "Final score of the home team."
+      - name: visitor_team_score
+        description: "Final score of the visiting team."
+      - name: score_margin
+        description: "Home score minus visitor score. Positive = home win."
+      - name: total_points
+        description: "Sum of both teams' final scores."
+      - name: is_postseason
+        description: "True if the game is a playoff game."
+      - name: winner
+        description: "Full name of the winning team, or TIE."
+      - name: home_spread
+        description: >
+          Consensus spread for the home team (median across bookmakers).
+          Negative = home favored (e.g. -5.5).
+      - name: home_spread_price
+        description: "Consensus American odds price for the home spread."
+      - name: home_spread_result
+        description: "COVERED, MISSED, or PUSH for home team ATS."
+      - name: away_spread
+        description: "Consensus spread for the away team."
+      - name: away_spread_price
+        description: "Consensus American odds price for the away spread."
+      - name: away_spread_result
+        description: "COVERED, MISSED, or PUSH for away team ATS."
+      - name: total_line
+        description: "Consensus over/under total line."
+      - name: over_price
+        description: "Consensus American odds price for the over."
+      - name: over_result
+        description: "COVERED (over hit), MISSED (under hit), or PUSH."
+      - name: home_ml_price
+        description: "Consensus American odds moneyline price for the home team."
+      - name: home_ml_implied_prob
+        description: "Implied win probability for the home team from moneyline odds."
+      - name: home_ml_result
+        description: "COVERED or MISSED for home team moneyline."
+      - name: away_ml_price
+        description: "Consensus American odds moneyline price for the away team."
+      - name: away_ml_implied_prob
+        description: "Implied win probability for the away team from moneyline odds."
+      - name: away_ml_result
+        description: "COVERED or MISSED for away team moneyline."
+
+  - name: mart_nba__team_ats_records
+    description: >
+      Team records Against the Spread, Straight Up, and Over/Under
+      with home/away splits and rankings.
+      Grain: one row per (season, team_name).
+      Rebuilt daily (~90 rows). Powers the ATS Records page.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - season
+              - team_name
+    columns:
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: team_name
+        description: "Full team name."
+        data_tests:
+          - not_null
+      - name: games_played
+        description: "Total games played in the season."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 110
+      - name: su_wins
+        description: "Straight-up wins."
+      - name: su_losses
+        description: "Straight-up losses."
+      - name: su_pct
+        description: "Straight-up win rate (0 to 1)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: home_su_wins
+        description: "Straight-up wins at home."
+      - name: home_su_losses
+        description: "Straight-up losses at home."
+      - name: away_su_wins
+        description: "Straight-up wins on the road."
+      - name: away_su_losses
+        description: "Straight-up losses on the road."
+      - name: ats_wins
+        description: "Games where the team covered the spread."
+      - name: ats_losses
+        description: "Games where the team missed the spread."
+      - name: ats_pushes
+        description: "Games where the spread result was a push."
+      - name: ats_pct
+        description: "ATS cover rate (0 to 1)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: home_ats_wins
+        description: "Spread covers at home."
+      - name: home_ats_losses
+        description: "Spread misses at home."
+      - name: home_ats_pushes
+        description: "Spread pushes at home."
+      - name: away_ats_wins
+        description: "Spread covers on the road."
+      - name: away_ats_losses
+        description: "Spread misses on the road."
+      - name: away_ats_pushes
+        description: "Spread pushes on the road."
+      - name: over_wins
+        description: "Games where the total went over."
+      - name: under_wins
+        description: "Games where the total went under."
+      - name: ou_pushes
+        description: "Games where the over/under result was a push."
+      - name: ats_rank
+        description: "Team rank by ATS cover rate within the season."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+      - name: su_rank
+        description: "Team rank by straight-up win rate within the season."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+
+  - name: mart_nba__team_matchup_stats
+    description: >
+      Season averages per team for head-to-head matchup comparison.
+      Grain: one row per (season, team_id).
+      Includes all counting stats, shooting percentages, advanced metrics,
+      and home/away splits. Powers the Team Matchup page.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - season
+              - team_id
+    columns:
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: team_id
+        description: "BallDontLie team identifier."
+        data_tests:
+          - not_null
+      - name: team_name
+        description: "Full team name."
+      - name: abbreviation
+        description: "Three-letter team abbreviation (e.g. LAL)."
+      - name: conference
+        description: "Team conference (East or West)."
+      - name: division
+        description: "Team division (e.g. Pacific, Atlantic)."
+      - name: games_played
+        description: "Total games played in the season."
+      - name: avg_pts
+        description: "Season average points scored per game."
+      - name: avg_opp_pts
+        description: "Season average opponent points per game."
+      - name: avg_point_diff
+        description: "Season average point differential (pts minus opp_pts)."
+      - name: avg_fgm
+        description: "Season average field goals made per game."
+      - name: avg_fga
+        description: "Season average field goals attempted per game."
+      - name: avg_fg_pct
+        description: "Season average field goal percentage."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0.3
+                max_value: 0.7
+      - name: avg_fg3m
+        description: "Season average three-pointers made per game."
+      - name: avg_fg3a
+        description: "Season average three-pointers attempted per game."
+      - name: avg_fg3_pct
+        description: "Season average three-point percentage."
+      - name: avg_ftm
+        description: "Season average free throws made per game."
+      - name: avg_fta
+        description: "Season average free throws attempted per game."
+      - name: avg_ft_pct
+        description: "Season average free throw percentage."
+      - name: avg_reb
+        description: "Season average total rebounds per game."
+      - name: avg_oreb
+        description: "Season average offensive rebounds per game."
+      - name: avg_dreb
+        description: "Season average defensive rebounds per game."
+      - name: avg_ast
+        description: "Season average assists per game."
+      - name: avg_turnovers
+        description: "Season average turnovers per game."
+      - name: avg_stl
+        description: "Season average steals per game."
+      - name: avg_blk
+        description: "Season average blocks per game."
+      - name: avg_pf
+        description: "Season average personal fouls per game."
+      - name: avg_possessions
+        description: "Season average estimated possessions per game."
+      - name: avg_off_rating
+        description: "Season average offensive rating (pts per 100 possessions)."
+      - name: avg_def_rating
+        description: "Season average defensive rating (opp pts per 100 possessions)."
+      - name: home_avg_pts
+        description: "Average points scored per game at home."
+      - name: away_avg_pts
+        description: "Average points scored per game on the road."
+      - name: home_avg_off_rating
+        description: "Average offensive rating at home."
+      - name: away_avg_off_rating
+        description: "Average offensive rating on the road."
+      - name: home_avg_def_rating
+        description: "Average defensive rating at home."
+      - name: away_avg_def_rating
+        description: "Average defensive rating on the road."
+      - name: off_rating_rank
+        description: "Team rank by offensive rating (1 = best)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+      - name: def_rating_rank
+        description: "Team rank by defensive rating (1 = best, lowest)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+      - name: point_diff_rank
+        description: "Team rank by average point differential (1 = best)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+
+  - name: mart_nba__game_predictions
+    description: >
+      Predictions for upcoming games across all 3 markets (spread, h2h, totals).
+      Grain: one row per (event_id, market_key, side).
+      Uses research-backed composite signals: projected edge vs spread,
+      Dean Oliver's Four Factors matchup, rest days, pace, and historical
+      track record. Expected value and bet rating (1-5 stars).
+      Incremental (WAP): audit table validates batch, then MERGE preserves
+      historical predictions after games complete.
+    columns:
+      - name: game_date
+        description: "Scheduled date of the game."
+      - name: event_id
+        description: "The Odds API event identifier."
+        data_tests:
+          - not_null
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: home_team
+        description: "Full name of the home team."
+      - name: away_team
+        description: "Full name of the away team."
+      - name: commence_time_utc
+        description: "Scheduled tip-off time in UTC."
+      - name: commence_time_et
+        description: "Scheduled tip-off time in Eastern."
+      - name: projected_home_score
+        description: "Model-projected home team score from L10 rolling averages."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 70
+                max_value: 150
+              config:
+                where: "projected_home_score is not null"
+      - name: projected_away_score
+        description: "Model-projected away team score from L10 rolling averages."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 70
+                max_value: 150
+              config:
+                where: "projected_away_score is not null"
+      - name: projected_total
+        description: "Sum of projected home and away scores."
+      - name: market_key
+        description: "Betting market: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: side
+        description: "Team name for spread/h2h, or Over/Under for totals."
+      - name: consensus_line
+        description: "Median line across bookmakers for this market and side."
+      - name: consensus_price
+        description: "Median American odds price across bookmakers."
+      - name: consensus_implied_prob
+        description: "Implied probability derived from consensus price."
+      - name: num_bookmakers
+        description: "Number of bookmakers contributing to the consensus."
+      - name: best_price
+        description: "Best available American odds price across bookmakers."
+      - name: cover_probability
+        description: >
+          Composite cover probability from research-backed signals.
+          Spreads: projected edge + Four Factors matchup + rest + ATS prior (base 50%, clamped 30-70%).
+          H2H: market implied prob + Four Factors + rest (clamped 10-90%).
+          Totals: total edge + pace matchup + O/U record (base 50%, clamped 30-70%).
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+              config:
+                where: "cover_probability is not null"
+      - name: season_market_wins
+        description: "Number of wins for this team/side in this market this season."
+      - name: season_market_total
+        description: "Total decided bets for this team/side in this market this season."
+      - name: expected_value
+        description: >
+          Expected value of a $1 bet: (cover_prob * payout) - (1 - cover_prob).
+          Positive = favorable bet.
+      - name: bet_rating
+        description: "1-5 star rating based on EV thresholds."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+      - name: home_l10_pts
+        description: "Home team L10 average points per game."
+      - name: home_l10_off_rating
+        description: "Home team L10 average offensive rating."
+      - name: home_l10_def_rating
+        description: "Home team L10 average defensive rating."
+      - name: away_l10_pts
+        description: "Away team L10 average points per game."
+      - name: away_l10_off_rating
+        description: "Away team L10 average offensive rating."
+      - name: away_l10_def_rating
+        description: "Away team L10 average defensive rating."
+      - name: home_rest_days
+        description: "Days since the home team's last game."
+      - name: away_rest_days
+        description: "Days since the away team's last game."
+      - name: home_l10_possessions
+        description: "Home team L10 average possessions per game."
+      - name: away_l10_possessions
+        description: "Away team L10 average possessions per game."
+      - name: home_l10_efg_pct
+        description: "Home team L10 effective field goal percentage (offense)."
+      - name: home_l10_tov_pct
+        description: "Home team L10 turnover percentage (offense)."
+      - name: home_l10_orb_pct
+        description: "Home team L10 offensive rebound percentage (offense)."
+      - name: home_l10_ftr
+        description: "Home team L10 free throw rate (offense)."
+      - name: home_l10_opp_efg_pct
+        description: "Home team L10 opponent eFG% (defense — lower is better)."
+      - name: home_l10_opp_tov_pct
+        description: "Home team L10 opponent TO% (defense — higher is better)."
+      - name: home_l10_opp_orb_pct
+        description: "Home team L10 opponent ORB% (defense — lower is better)."
+      - name: home_l10_opp_ftr
+        description: "Home team L10 opponent FTR (defense — lower is better)."
+      - name: away_l10_efg_pct
+        description: "Away team L10 effective field goal percentage (offense)."
+      - name: away_l10_tov_pct
+        description: "Away team L10 turnover percentage (offense)."
+      - name: away_l10_orb_pct
+        description: "Away team L10 offensive rebound percentage (offense)."
+      - name: away_l10_ftr
+        description: "Away team L10 free throw rate (offense)."
+      - name: away_l10_opp_efg_pct
+        description: "Away team L10 opponent eFG% (defense — lower is better)."
+      - name: away_l10_opp_tov_pct
+        description: "Away team L10 opponent TO% (defense — higher is better)."
+      - name: away_l10_opp_orb_pct
+        description: "Away team L10 opponent ORB% (defense — lower is better)."
+      - name: away_l10_opp_ftr
+        description: "Away team L10 opponent FTR (defense — lower is better)."
+
+  - name: mart_nba__game_grades
+    description: >
+      Post-game team performance grades comparing actual stats to pre-game
+      L10 rolling averages and season averages. Splits into offensive,
+      defensive, and hybrid grades. Computes deltas for every stat to
+      surface the top factors driving a cover or miss.
+      Grain: one row per (game_date, game_id, team_id) — two per game.
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie game identifier."
+      - name: team_id
+        description: "BallDontLie team identifier."
+      - name: team_name
+        description: "Full team name."
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: is_home
+        description: "True if this team was the home team."
+      - name: opp_team_name
+        description: "Full name of the opposing team."
+      - name: season_game_number
+        description: "Sequential game number for this team within the season."
+      - name: pts
+        description: "Actual points scored."
+      - name: opp_pts
+        description: "Actual opponent points scored."
+      - name: reb
+        description: "Actual total rebounds."
+      - name: ast
+        description: "Actual assists."
+      - name: turnovers
+        description: "Actual turnovers."
+      - name: stl
+        description: "Actual steals."
+      - name: blk
+        description: "Actual blocks."
+      - name: pf
+        description: "Actual personal fouls."
+      - name: fg_pct
+        description: "Actual field goal percentage."
+      - name: fg3_pct
+        description: "Actual three-point percentage."
+      - name: ft_pct
+        description: "Actual free throw percentage."
+      - name: est_possessions
+        description: "Estimated possessions for this game."
+      - name: off_rating
+        description: "Actual offensive rating (pts per 100 possessions)."
+      - name: def_rating
+        description: "Actual defensive rating (opp pts per 100 possessions)."
+      - name: score_margin
+        description: "This team's score minus opponent's score."
+      - name: total_points
+        description: "Sum of both teams' final scores."
+      - name: home_spread
+        description: "Consensus home spread from the game result."
+      - name: spread_result
+        description: "COVERED, MISSED, or PUSH for this team."
+      - name: ml_result
+        description: "COVERED or MISSED for this team's moneyline."
+      - name: over_result
+        description: "COVERED (over hit), MISSED (under hit), or PUSH."
+      - name: pts_delta_l10
+        description: "Points minus L10 average."
+      - name: opp_pts_delta_l10
+        description: "Opponent points minus L10 average."
+      - name: reb_delta_l10
+        description: "Rebounds minus L10 average."
+      - name: ast_delta_l10
+        description: "Assists minus L10 average."
+      - name: turnovers_delta_l10
+        description: "Turnovers minus L10 average."
+      - name: stl_delta_l10
+        description: "Steals minus L10 average."
+      - name: blk_delta_l10
+        description: "Blocks minus L10 average."
+      - name: fg_pct_delta_l10
+        description: "Field goal percentage minus L10 average."
+      - name: fg3_pct_delta_l10
+        description: "Three-point percentage minus L10 average."
+      - name: ft_pct_delta_l10
+        description: "Free throw percentage minus L10 average."
+      - name: off_rating_delta_l10
+        description: "Actual off_rating minus L10 average."
+      - name: def_rating_delta_l10
+        description: "Actual def_rating minus L10 average. Positive = worse defense than expected."
+      - name: possessions_delta_l10
+        description: "Estimated possessions minus L10 average."
+      - name: pf_delta_l10
+        description: "Personal fouls minus L10 average."
+      - name: pts_delta_season
+        description: "Points minus season average."
+      - name: opp_pts_delta_season
+        description: "Opponent points minus season average."
+      - name: reb_delta_season
+        description: "Rebounds minus season average."
+      - name: ast_delta_season
+        description: "Assists minus season average."
+      - name: turnovers_delta_season
+        description: "Turnovers minus season average."
+      - name: stl_delta_season
+        description: "Steals minus season average."
+      - name: blk_delta_season
+        description: "Blocks minus season average."
+      - name: fg_pct_delta_season
+        description: "Field goal percentage minus season average."
+      - name: fg3_pct_delta_season
+        description: "Three-point percentage minus season average."
+      - name: ft_pct_delta_season
+        description: "Free throw percentage minus season average."
+      - name: off_rating_delta_season
+        description: "Offensive rating minus season average."
+      - name: def_rating_delta_season
+        description: "Defensive rating minus season average."
+      - name: possessions_delta_season
+        description: "Estimated possessions minus season average."
+      - name: pf_delta_season
+        description: "Personal fouls minus season average."
+      - name: l10_avg_pts
+        description: "L10 rolling average points scored."
+      - name: l10_avg_opp_pts
+        description: "L10 rolling average opponent points."
+      - name: l10_avg_fg_pct
+        description: "L10 rolling average field goal percentage."
+      - name: l10_avg_fg3_pct
+        description: "L10 rolling average three-point percentage."
+      - name: l10_avg_off_rating
+        description: "L10 rolling average offensive rating."
+      - name: l10_avg_def_rating
+        description: "L10 rolling average defensive rating."
+      - name: season_avg_pts
+        description: "Season average points scored."
+      - name: season_avg_opp_pts
+        description: "Season average opponent points."
+      - name: season_avg_fg_pct
+        description: "Season average field goal percentage."
+      - name: season_avg_fg3_pct
+        description: "Season average three-point percentage."
+      - name: season_avg_off_rating
+        description: "Season average offensive rating."
+      - name: season_avg_def_rating
+        description: "Season average defensive rating."
+      - name: off_performance_grade
+        description: "Letter grade A+ through F based on off_rating delta vs L10."
+      - name: def_performance_grade
+        description: "Letter grade A+ through F based on inverted def_rating delta vs L10. Positive delta = better defense."
+      - name: performance_grade
+        description: "Hybrid letter grade based on average of off and inverted def rating deltas vs L10."
+
+  - name: mart_nba__player_game_grades
+    description: >
+      Post-game player performance grades comparing actual stats to L10
+      rolling averages and season averages. Uses Hollinger's Game Score
+      for the overall grade. No off/def split — box scores cannot produce
+      true individual offensive/defensive ratings.
+      Grain: one row per (game_date, game_id, player_id).
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+      - name: game_id
+        description: "BallDontLie game identifier."
+      - name: player_id
+        description: "BallDontLie player identifier."
+      - name: player_name
+        description: "Full name of the player."
+      - name: team_id
+        description: "BallDontLie team identifier."
+      - name: team_name
+        description: "Full team name."
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+      - name: is_home
+        description: "True if the player's team was the home team."
+      - name: season_game_number
+        description: "Sequential game number for this player within the season."
+      - name: minutes_played
+        description: "Minutes played in this game."
+      - name: pts
+        description: "Actual points scored."
+      - name: reb
+        description: "Actual total rebounds."
+      - name: ast
+        description: "Actual assists."
+      - name: stl
+        description: "Actual steals."
+      - name: blk
+        description: "Actual blocks."
+      - name: turnovers
+        description: "Actual turnovers."
+      - name: pf
+        description: "Actual personal fouls."
+      - name: fg_pct
+        description: "Actual field goal percentage."
+      - name: fg3_pct
+        description: "Actual three-point percentage."
+      - name: ft_pct
+        description: "Actual free throw percentage."
+      - name: game_score
+        description: "Hollinger Game Score: PTS + 0.4*FGM - 0.7*FGA - 0.4*(FTA-FTM) + 0.7*OREB + 0.3*DREB + STL + 0.7*AST + 0.7*BLK - 0.4*PF - TOV."
+      - name: home_spread
+        description: "Consensus home spread from the game result."
+      - name: spread_result
+        description: "COVERED, MISSED, or PUSH for this player's team."
+      - name: pts_delta_l10
+        description: "Points minus L10 average."
+      - name: reb_delta_l10
+        description: "Rebounds minus L10 average."
+      - name: ast_delta_l10
+        description: "Assists minus L10 average."
+      - name: stl_delta_l10
+        description: "Steals minus L10 average."
+      - name: blk_delta_l10
+        description: "Blocks minus L10 average."
+      - name: turnovers_delta_l10
+        description: "Turnovers minus L10 average."
+      - name: pf_delta_l10
+        description: "Personal fouls minus L10 average."
+      - name: fg_pct_delta_l10
+        description: "Field goal percentage minus L10 average."
+      - name: fg3_pct_delta_l10
+        description: "Three-point percentage minus L10 average."
+      - name: ft_pct_delta_l10
+        description: "Free throw percentage minus L10 average."
+      - name: game_score_delta_l10
+        description: "Game score minus L10 average."
+      - name: minutes_delta_l10
+        description: "Minutes played minus L10 average."
+      - name: pts_delta_season
+        description: "Points minus season average."
+      - name: reb_delta_season
+        description: "Rebounds minus season average."
+      - name: ast_delta_season
+        description: "Assists minus season average."
+      - name: stl_delta_season
+        description: "Steals minus season average."
+      - name: blk_delta_season
+        description: "Blocks minus season average."
+      - name: turnovers_delta_season
+        description: "Turnovers minus season average."
+      - name: pf_delta_season
+        description: "Personal fouls minus season average."
+      - name: fg_pct_delta_season
+        description: "Field goal percentage minus season average."
+      - name: fg3_pct_delta_season
+        description: "Three-point percentage minus season average."
+      - name: ft_pct_delta_season
+        description: "Free throw percentage minus season average."
+      - name: game_score_delta_season
+        description: "Game score minus season average."
+      - name: minutes_delta_season
+        description: "Minutes played minus season average."
+      - name: l10_avg_pts
+        description: "L10 rolling average points."
+      - name: l10_avg_reb
+        description: "L10 rolling average rebounds."
+      - name: l10_avg_ast
+        description: "L10 rolling average assists."
+      - name: l10_avg_stl
+        description: "L10 rolling average steals."
+      - name: l10_avg_blk
+        description: "L10 rolling average blocks."
+      - name: l10_avg_game_score
+        description: "L10 rolling average game score."
+      - name: l10_avg_fg_pct
+        description: "L10 rolling average field goal percentage."
+      - name: l10_avg_fg3_pct
+        description: "L10 rolling average three-point percentage."
+      - name: l10_avg_minutes_played
+        description: "L10 rolling average minutes played."
+      - name: season_avg_pts
+        description: "Season average points."
+      - name: season_avg_reb
+        description: "Season average rebounds."
+      - name: season_avg_ast
+        description: "Season average assists."
+      - name: season_avg_stl
+        description: "Season average steals."
+      - name: season_avg_blk
+        description: "Season average blocks."
+      - name: season_avg_game_score
+        description: "Season average game score."
+      - name: season_avg_fg_pct
+        description: "Season average field goal percentage."
+      - name: season_avg_fg3_pct
+        description: "Season average three-point percentage."
+      - name: season_avg_minutes_played
+        description: "Season average minutes played."
+      - name: performance_grade
+        description: "Letter grade A+ through F based on Hollinger Game Score delta vs L10."

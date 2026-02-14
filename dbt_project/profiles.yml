@@ -1,0 +1,25 @@
+nba_betting_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: aab46027.us-west-2
+
+      # Key-pair (RSA) auth
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE', '') }}"
+
+      role: ALL_USERS_ROLE
+      database: DATAEXPERT_STUDENT
+      warehouse: COMPUTE_WH
+      schema: "{{ env_var('STUDENT_SCHEMA') }}"
+      threads: 1
+      client_session_keep_alive: False
+      query_tag: "{{ env_var('STUDENT_SCHEMA') }}"
+
+      connect_retries: 0
+      connect_timeout: 10
+      retry_on_database_errors: False
+      retry_all: False
+      reuse_connections: True

@@ -1,0 +1,601 @@
+version: 2
+
+models:
+  - name: live_nba__scoreboard
+    description: >
+      Live game scoreboard view. One row per game_id.
+      Includes scheduled, in-progress, and final games.
+      Always fresh — reads directly from hot-path source table.
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: season
+        description: "NBA season year (e.g. 2024 for the 2024-25 season)."
+      - name: status
+        description: "Game status: Scheduled, In Progress, or Final."
+      - name: period
+        description: "Current period of the game (1-4, 5+ for OT)."
+      - name: clock
+        description: "Game clock remaining in the current period."
+      - name: game_datetime
+        description: "Scheduled tip-off timestamp (UTC)."
+      - name: home_team_id
+        description: "BallDontLie team ID for the home team."
+      - name: home_team_name
+        description: "Full name of the home team."
+      - name: home_team_score
+        description: "Home team total score."
+      - name: home_q1
+        description: "Home team 1st quarter score."
+      - name: home_q2
+        description: "Home team 2nd quarter score."
+      - name: home_q3
+        description: "Home team 3rd quarter score."
+      - name: home_q4
+        description: "Home team 4th quarter score."
+      - name: home_ot1
+        description: "Home team 1st overtime score."
+      - name: home_ot2
+        description: "Home team 2nd overtime score."
+      - name: home_ot3
+        description: "Home team 3rd overtime score."
+      - name: home_timeouts_remaining
+        description: "Number of timeouts remaining for the home team."
+      - name: home_in_bonus
+        description: "Whether the home team is in the bonus (opponent foul trouble)."
+      - name: visitor_team_id
+        description: "BallDontLie team ID for the visiting team."
+      - name: visitor_team_name
+        description: "Full name of the visiting team."
+      - name: visitor_team_score
+        description: "Visiting team total score."
+      - name: visitor_q1
+        description: "Visiting team 1st quarter score."
+      - name: visitor_q2
+        description: "Visiting team 2nd quarter score."
+      - name: visitor_q3
+        description: "Visiting team 3rd quarter score."
+      - name: visitor_q4
+        description: "Visiting team 4th quarter score."
+      - name: visitor_ot1
+        description: "Visiting team 1st overtime score."
+      - name: visitor_ot2
+        description: "Visiting team 2nd overtime score."
+      - name: visitor_ot3
+        description: "Visiting team 3rd overtime score."
+      - name: visitor_timeouts_remaining
+        description: "Number of timeouts remaining for the visiting team."
+      - name: visitor_in_bonus
+        description: "Whether the visiting team is in the bonus (opponent foul trouble)."
+      - name: postseason
+        description: "Whether the game is a playoff game."
+      - name: postponed
+        description: "Whether the game has been postponed."
+      - name: updated_at
+        description: "Timestamp of the last hot-path MERGE update."
+
+  - name: live_nba__player_box_scores
+    description: >
+      Live player box scores view. One row per (game_id, player_id).
+      Renames turnover → turnovers for consistency.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - player_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "BallDontLie player identifier."
+        data_tests:
+          - not_null
+      - name: player_name
+        description: "Full name of the player."
+      - name: team_id
+        description: "BallDontLie team ID for the player's team."
+      - name: team_name
+        description: "Full name of the player's team."
+      - name: is_home
+        description: "Whether the player's team is the home team."
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: season
+        description: "NBA season year."
+      - name: status
+        description: "Game status: Scheduled, In Progress, or Final."
+      - name: min
+        description: "Minutes played in MM:SS format."
+      - name: pts
+        description: "Points scored."
+      - name: reb
+        description: "Total rebounds."
+      - name: oreb
+        description: "Offensive rebounds."
+      - name: dreb
+        description: "Defensive rebounds."
+      - name: ast
+        description: "Assists."
+      - name: stl
+        description: "Steals."
+      - name: blk
+        description: "Blocks."
+      - name: turnovers
+        description: "Turnovers (renamed from turnover for consistency)."
+      - name: pf
+        description: "Personal fouls."
+      - name: fgm
+        description: "Field goals made."
+      - name: fga
+        description: "Field goals attempted."
+      - name: fg_pct
+        description: "Field goal percentage."
+      - name: fg3m
+        description: "Three-point field goals made."
+      - name: fg3a
+        description: "Three-point field goals attempted."
+      - name: fg3_pct
+        description: "Three-point field goal percentage."
+      - name: ftm
+        description: "Free throws made."
+      - name: fta
+        description: "Free throws attempted."
+      - name: ft_pct
+        description: "Free throw percentage."
+      - name: updated_at
+        description: "Timestamp of the last hot-path MERGE update."
+
+  - name: live_nba__team_box_scores
+    description: >
+      Live team-level box scores aggregated from player stats.
+      One row per (game_id, team_id). Computes shooting percentages,
+      estimated possessions. Mirrors the existing Snowflake VIEW.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - team_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "BallDontLie team identifier."
+        data_tests:
+          - not_null
+      - name: team_name
+        description: "Full name of the team."
+      - name: is_home
+        description: "Whether this is the home team."
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: season
+        description: "NBA season year."
+      - name: status
+        description: "Game status: Scheduled, In Progress, or Final."
+      - name: players
+        description: "Number of players with box score entries for this team."
+      - name: pts
+        description: "Total team points."
+      - name: reb
+        description: "Total team rebounds."
+      - name: oreb
+        description: "Total team offensive rebounds."
+      - name: dreb
+        description: "Total team defensive rebounds."
+      - name: ast
+        description: "Total team assists."
+      - name: stl
+        description: "Total team steals."
+      - name: blk
+        description: "Total team blocks."
+      - name: turnovers
+        description: "Total team turnovers."
+      - name: pf
+        description: "Total team personal fouls."
+      - name: fgm
+        description: "Total team field goals made."
+      - name: fga
+        description: "Total team field goals attempted."
+      - name: fg_pct
+        description: "Team field goal percentage (fgm / fga)."
+      - name: fg3m
+        description: "Total team three-point field goals made."
+      - name: fg3a
+        description: "Total team three-point field goals attempted."
+      - name: fg3_pct
+        description: "Team three-point field goal percentage (fg3m / fg3a)."
+      - name: ftm
+        description: "Total team free throws made."
+      - name: fta
+        description: "Total team free throws attempted."
+      - name: ft_pct
+        description: "Team free throw percentage (ftm / fta)."
+      - name: est_possessions
+        description: "Estimated possessions using FGA + 0.475*FTA - OREB + TOV."
+      - name: updated_at
+        description: "Most recent player update timestamp for this team/game."
+
+  - name: live_nba__plays
+    description: >
+      Live play-by-play events. One row per (game_id, play_id).
+      2025+ season only. Immutable once inserted.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - play_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: play_id
+        description: "BallDontLie play event identifier."
+        data_tests:
+          - not_null
+      - name: period
+        description: "Period in which the play occurred (1-4, 5+ for OT)."
+      - name: period_display
+        description: "Human-readable period label (e.g. Q1, OT1)."
+      - name: clock
+        description: "Game clock at the time of the play."
+      - name: action_type
+        description: "Type of play action (e.g. shot, turnover, foul)."
+      - name: description
+        description: "Full text description of the play."
+      - name: team_id
+        description: "BallDontLie team ID associated with the play."
+      - name: team_name
+        description: "Full name of the team associated with the play."
+      - name: scoring_play
+        description: "Whether the play resulted in points scored."
+      - name: shooting_play
+        description: "Whether the play was a shot attempt."
+      - name: score_value
+        description: "Points scored on the play (0, 1, 2, or 3)."
+      - name: home_score
+        description: "Running home team score after this play."
+      - name: away_score
+        description: "Running away team score after this play."
+      - name: coordinate_x
+        description: "Court X coordinate of the play (half-court)."
+      - name: coordinate_y
+        description: "Court Y coordinate of the play (half-court)."
+      - name: updated_at
+        description: "Timestamp when the play was ingested."
+
+  - name: live_nba__odds_current
+    description: >
+      Current live odds per bookmaker, enriched with consensus
+      (median) price and line for each market/side. One row per
+      (event_id, bookmaker_key, market_key, side). Powers the
+      bookmaker comparison table and consensus line display.
+    columns:
+      - name: event_id
+        description: "The Odds API event identifier."
+        data_tests:
+          - not_null
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: home_team
+        description: "Full name of the home team (normalized)."
+      - name: away_team
+        description: "Full name of the away team (normalized)."
+      - name: commence_time_utc
+        description: "Scheduled tip-off timestamp (UTC)."
+      - name: bookmaker_key
+        description: "Short key identifying the bookmaker (e.g. fanduel)."
+      - name: bookmaker_title
+        description: "Display name of the bookmaker."
+      - name: bookmaker_last_update
+        description: "Timestamp of the bookmaker's last odds update."
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: side
+        description: "Outcome side — team name (h2h/spreads) or Over/Under (totals)."
+      - name: outcome_price
+        description: "American odds price from this bookmaker."
+      - name: outcome_point
+        description: "Point spread or total line from this bookmaker (null for h2h)."
+      - name: implied_probability
+        description: "Derived probability from this bookmaker's American odds."
+      - name: consensus_price
+        description: "Median American odds price across all bookmakers for this market/side."
+      - name: consensus_line
+        description: "Median point spread or total across all bookmakers for this market/side."
+      - name: consensus_implied_prob
+        description: "Derived probability from the consensus (median) American odds."
+      - name: num_bookmakers
+        description: "Number of bookmakers offering this market/side."
+      - name: best_price
+        description: "Most favorable American odds across all bookmakers for this market/side."
+      - name: worst_price
+        description: "Least favorable American odds across all bookmakers for this market/side."
+      - name: updated_at
+        description: "Timestamp of the last hot-path MERGE update for this row."
+
+  - name: live_nba__odds_movement
+    description: >
+      Historical odds snapshots for line movement charts.
+      One row per snapshot per bookmaker per market per outcome.
+      Append-only source — never deleted.
+    columns:
+      - name: snapshot_time
+        description: "When the snapshot was captured."
+        data_tests:
+          - not_null
+      - name: event_id
+        description: "The Odds API event identifier."
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: home_team
+        description: "Full name of the home team (normalized)."
+      - name: away_team
+        description: "Full name of the away team (normalized)."
+      - name: commence_time_utc
+        description: "Scheduled tip-off timestamp (UTC)."
+      - name: bookmaker_key
+        description: "Short key identifying the bookmaker."
+      - name: bookmaker_title
+        description: "Display name of the bookmaker."
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: side
+        description: "Outcome side — team name (h2h/spreads) or Over/Under (totals)."
+      - name: outcome_price
+        description: "American odds price at snapshot time."
+      - name: outcome_point
+        description: "Point spread or total line at snapshot time (null for h2h)."
+      - name: implied_probability
+        description: "Derived probability from American odds at snapshot time."
+
+  - name: live_nba__game_detail
+    description: >
+      Combined game detail view joining scoreboard, home/away team
+      box scores, and consensus spread line. Powers the Game Detail
+      page in Streamlit. One row per game_id.
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: season
+        description: "NBA season year."
+      - name: status
+        description: "Game status: Scheduled, In Progress, or Final."
+      - name: period
+        description: "Current period of the game (1-4, 5+ for OT)."
+      - name: clock
+        description: "Game clock remaining in the current period."
+      - name: game_datetime
+        description: "Scheduled tip-off timestamp (UTC)."
+      - name: home_team_name
+        description: "Full name of the home team."
+      - name: visitor_team_name
+        description: "Full name of the visiting team."
+      - name: home_team_score
+        description: "Home team total score."
+      - name: visitor_team_score
+        description: "Visiting team total score."
+      - name: home_q1
+        description: "Home team 1st quarter score."
+      - name: home_q2
+        description: "Home team 2nd quarter score."
+      - name: home_q3
+        description: "Home team 3rd quarter score."
+      - name: home_q4
+        description: "Home team 4th quarter score."
+      - name: visitor_q1
+        description: "Visiting team 1st quarter score."
+      - name: visitor_q2
+        description: "Visiting team 2nd quarter score."
+      - name: visitor_q3
+        description: "Visiting team 3rd quarter score."
+      - name: visitor_q4
+        description: "Visiting team 4th quarter score."
+      - name: home_pts
+        description: "Home team total points from box score aggregation."
+      - name: home_fg_pct
+        description: "Home team field goal percentage."
+      - name: home_fg3_pct
+        description: "Home team three-point field goal percentage."
+      - name: home_reb
+        description: "Home team total rebounds."
+      - name: home_ast
+        description: "Home team total assists."
+      - name: home_turnovers
+        description: "Home team total turnovers."
+      - name: home_stl
+        description: "Home team total steals."
+      - name: home_blk
+        description: "Home team total blocks."
+      - name: home_possessions
+        description: "Home team estimated possessions."
+      - name: away_pts
+        description: "Away team total points from box score aggregation."
+      - name: away_fg_pct
+        description: "Away team field goal percentage."
+      - name: away_fg3_pct
+        description: "Away team three-point field goal percentage."
+      - name: away_reb
+        description: "Away team total rebounds."
+      - name: away_ast
+        description: "Away team total assists."
+      - name: away_turnovers
+        description: "Away team total turnovers."
+      - name: away_stl
+        description: "Away team total steals."
+      - name: away_blk
+        description: "Away team total blocks."
+      - name: away_possessions
+        description: "Away team estimated possessions."
+      - name: home_spread
+        description: "Consensus (median) home spread line across bookmakers."
+      - name: home_spread_price
+        description: "Consensus (median) American odds price for the home spread."
+      - name: home_spread_implied_prob
+        description: "Implied probability derived from the consensus home spread price."
+      - name: updated_at
+        description: "Timestamp of the last scoreboard update for this game."
+
+  - name: live_nba__game_results
+    description: >
+      Live game results with betting outcomes for Final games.
+      Mirrors mart_nba__game_results using live scoreboard + live odds.
+      One row per game_id. Grades and results appear instantly when a
+      game ends; cold path produces official results overnight.
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: season
+        description: "NBA season year."
+      - name: home_team_name
+        description: "Full name of the home team."
+      - name: visitor_team_name
+        description: "Full name of the visiting team."
+      - name: home_team_score
+        description: "Home team final score."
+      - name: visitor_team_score
+        description: "Visiting team final score."
+      - name: score_margin
+        description: "Home score minus visitor score (positive = home win)."
+      - name: total_points
+        description: "Combined final score of both teams."
+      - name: is_postseason
+        description: "Whether the game is a playoff game."
+      - name: winner
+        description: "Full name of the winning team, or TIE."
+      - name: home_spread
+        description: "Consensus (median) home spread line."
+      - name: home_spread_price
+        description: "Consensus American odds price for the home spread."
+      - name: home_spread_result
+        description: "COVERED, PUSH, or MISSED for the home spread."
+      - name: away_spread
+        description: "Consensus (median) away spread line."
+      - name: away_spread_price
+        description: "Consensus American odds price for the away spread."
+      - name: away_spread_result
+        description: "COVERED, PUSH, or MISSED for the away spread."
+      - name: total_line
+        description: "Consensus (median) total points line."
+      - name: over_price
+        description: "Consensus American odds price for the over."
+      - name: over_result
+        description: "COVERED, PUSH, or MISSED for the over."
+      - name: home_ml_price
+        description: "Consensus American odds price for the home moneyline."
+      - name: home_ml_implied_prob
+        description: "Implied probability from the consensus home moneyline."
+      - name: home_ml_result
+        description: "COVERED or MISSED for the home moneyline."
+      - name: away_ml_price
+        description: "Consensus American odds price for the away moneyline."
+      - name: away_ml_implied_prob
+        description: "Implied probability from the consensus away moneyline."
+      - name: away_ml_result
+        description: "COVERED or MISSED for the away moneyline."
+
+  - name: live_nba__game_grades
+    description: >
+      Live post-game team performance grades comparing actual stats to
+      L10 rolling averages and season averages. Mirrors mart_nba__game_grades
+      using live box scores + cold-path rolling stats. Two rows per game
+      (home + away). Rolling stats may be ~1 game stale; cold path
+      produces exact grades at 3 AM.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - team_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "BallDontLie team identifier."
+        data_tests:
+          - not_null
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: team_name
+        description: "Full name of the team."
+      - name: season
+        description: "NBA season year."
+      - name: is_home
+        description: "Whether this is the home team."
+      - name: opp_team_name
+        description: "Full name of the opponent."
+      - name: off_rating
+        description: "Offensive rating: points per 100 estimated possessions."
+      - name: def_rating
+        description: "Defensive rating: opponent points per 100 estimated possessions."
+      - name: off_performance_grade
+        description: "Letter grade (A+ to F) for offensive performance vs L10 average."
+      - name: def_performance_grade
+        description: "Letter grade (A+ to F) for defensive performance vs L10 average."
+      - name: performance_grade
+        description: "Letter grade (A+ to F) for overall performance (avg of off + def)."
+
+  - name: live_nba__player_game_grades
+    description: >
+      Live post-game player performance grades using Hollinger's Game Score
+      compared to L10 rolling averages and season averages. Mirrors
+      mart_nba__player_game_grades using live box scores + cold-path rolling
+      stats. One row per (game_id, player_id). Rolling stats may be ~1 game
+      stale; cold path produces exact grades at 3 AM.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - player_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "BallDontLie player identifier."
+        data_tests:
+          - not_null
+      - name: game_date
+        description: "Calendar date of the game (Eastern time)."
+      - name: player_name
+        description: "Full name of the player."
+      - name: team_name
+        description: "Full name of the player's team."
+      - name: game_score
+        description: "Hollinger's Game Score for this performance."
+      - name: performance_grade
+        description: "Letter grade (A+ to F) based on Game Score delta vs L10 average."

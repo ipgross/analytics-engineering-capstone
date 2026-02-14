@@ -1,0 +1,301 @@
+version: 2
+
+models:
+  - name: stg_nba__events
+    description: >
+      Staged game schedule/events from The Odds API.
+      Grain: one row per (game_date, event_id).
+      Renames ds → game_date, coalesces postponed flag.
+    columns:
+      - name: game_date
+        description: "Game date (Eastern time)."
+        data_tests:
+          - not_null
+      - name: event_id
+        description: "Unique Odds API event identifier."
+        data_tests:
+          - not_null
+      - name: home_team
+        description: "Home team name (normalized at ingestion)."
+        data_tests:
+          - not_null
+      - name: away_team
+        description: "Away team name (normalized at ingestion)."
+        data_tests:
+          - not_null
+      - name: season
+        description: "NBA season string, e.g. '2024-25'."
+        data_tests:
+          - not_null
+      - name: sport_key
+        description: "Sport identifier from The Odds API (always 'basketball_nba')."
+      - name: commence_time_utc
+        description: "Scheduled game start time in UTC."
+        data_tests:
+          - not_null
+      - name: commence_time_et
+        description: "Scheduled game start time in Eastern."
+      - name: is_postponed
+        description: "TRUE if event had no matching game in reconcile DAG."
+      - name: ingested_at
+        description: "Timestamp when the record was loaded to Snowflake."
+
+  - name: stg_nba__odds_open
+    description: >
+      Staged morning-line odds from The Odds API.
+      Grain: one row per (game_date, event_id, bookmaker_key, market_key, outcome_name).
+      Adds implied_probability computed from American odds.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - event_id
+              - bookmaker_key
+              - market_key
+              - outcome_name
+    columns:
+      - name: game_date
+        description: "Game date (Eastern time)."
+        data_tests:
+          - not_null
+      - name: event_id
+        description: "Unique Odds API event identifier."
+        data_tests:
+          - not_null
+      - name: market_key
+        description: "Bet market type."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: outcome_name
+        description: "Team name (h2h/spreads) or Over/Under (totals)."
+        data_tests:
+          - not_null
+      - name: outcome_price
+        description: "American odds (e.g. -110, +150)."
+        data_tests:
+          - not_null
+      - name: season
+        description: "NBA season string, e.g. '2024-25'."
+      - name: home_team
+        description: "Home team name (normalized at ingestion)."
+      - name: away_team
+        description: "Away team name (normalized at ingestion)."
+      - name: commence_time_utc
+        description: "Scheduled game start time in UTC (max per event for consistency)."
+      - name: commence_time_et
+        description: "Scheduled game start time in Eastern (max per event for consistency)."
+      - name: bookmaker_key
+        description: "Sportsbook identifier (fanduel, draftkings, etc.)."
+      - name: bookmaker_title
+        description: "Human-readable sportsbook name."
+      - name: bookmaker_last_update
+        description: "When this bookmaker last updated their odds."
+      - name: outcome_point
+        description: "Point spread or total line. NULL for h2h."
+      - name: implied_probability
+        description: "Derived probability from American odds (0 to 1)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: ingested_at
+        description: "Timestamp when the record was loaded to Snowflake."
+
+  - name: stg_nba__games
+    description: >
+      Staged final game results from BallDontLie API.
+      Grain: one row per (game_date, game_id).
+      Filters to status=Final only. Computes score_margin and total_points.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+    columns:
+      - name: game_date
+        description: "Game date (Eastern time)."
+        data_tests:
+          - not_null
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: season
+        description: "NBA season string, e.g. '2024-25'."
+      - name: status
+        description: "Game status (always 'Final' — filtered in staging)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Final']
+      - name: home_team_name
+        description: "Home team full name from BallDontLie."
+        data_tests:
+          - not_null
+      - name: visitor_team_name
+        description: "Visitor team full name from BallDontLie."
+        data_tests:
+          - not_null
+      - name: home_team_score
+        description: "Home team final score."
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 50
+                max_value: 200
+      - name: visitor_team_score
+        description: "Visitor team final score."
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 50
+                max_value: 200
+      - name: home_team_id
+        description: "BallDontLie team ID for the home team."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_nba__teams')
+                field: team_id
+      - name: visitor_team_id
+        description: "BallDontLie team ID for the visitor team."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_nba__teams')
+                field: team_id
+      - name: score_margin
+        description: "home_team_score - visitor_team_score. Positive = home win."
+      - name: total_points
+        description: "home_team_score + visitor_team_score."
+      - name: is_postseason
+        description: "TRUE if this game is a playoff game."
+      - name: ingested_at
+        description: "Timestamp when the record was loaded to Snowflake."
+
+  - name: stg_nba__player_box_scores
+    description: >
+      Staged player-level box scores from BallDontLie API.
+      Grain: one row per (game_date, game_id, player_id).
+      Parses minutes string to decimal, coalesces all stats to 0.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - player_id
+    columns:
+      - name: game_date
+        description: "Game date (Eastern time)."
+        data_tests:
+          - not_null
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "BallDontLie player identifier."
+        data_tests:
+          - not_null
+      - name: player_name
+        description: "Full name of the player."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "BallDontLie team ID for the player's team."
+        data_tests:
+          - not_null
+      - name: minutes_played
+        description: "Playing time in decimal minutes (parsed from MM:SS)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 65
+      - name: team_name
+        description: "Player's team full name."
+      - name: season
+        description: "NBA season string, e.g. '2024-25'."
+      - name: is_home
+        description: "TRUE if player's team is the home team."
+      - name: pts
+        description: "Points scored."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: reb
+        description: "Total rebounds."
+      - name: oreb
+        description: "Offensive rebounds."
+      - name: dreb
+        description: "Defensive rebounds."
+      - name: ast
+        description: "Assists."
+      - name: stl
+        description: "Steals."
+      - name: blk
+        description: "Blocks."
+      - name: turnovers
+        description: "Turnovers (renamed from 'turnover')."
+      - name: pf
+        description: "Personal fouls."
+      - name: fgm
+        description: "Field goals made."
+      - name: fga
+        description: "Field goals attempted."
+      - name: fg3m
+        description: "Three-point field goals made."
+      - name: fg3a
+        description: "Three-point field goals attempted."
+      - name: ftm
+        description: "Free throws made."
+      - name: fta
+        description: "Free throws attempted."
+      - name: ingested_at
+        description: "Timestamp when the record was loaded to Snowflake."
+
+  - name: stg_nba__teams
+    description: >
+      Staged NBA team reference data from BallDontLie API.
+      Grain: one row per team_id. 30 active NBA teams.
+    columns:
+      - name: team_id
+        description: "BallDontLie team identifier (primary key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: full_name
+        description: "Full team name (e.g. 'Los Angeles Lakers')."
+        data_tests:
+          - not_null
+      - name: abbreviation
+        description: "Three-letter team abbreviation (e.g. 'LAL')."
+        data_tests:
+          - not_null
+      - name: short_name
+        description: "Short team name (e.g. 'Lakers')."
+      - name: city
+        description: "Team city."
+      - name: conference
+        description: "NBA conference (East or West)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['East', 'West']
+      - name: division
+        description: "NBA division (Atlantic, Central, Southeast, Northwest, Pacific, Southwest)."

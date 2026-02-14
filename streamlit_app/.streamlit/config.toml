@@ -1,0 +1,19 @@
+[theme]
+base = "dark"
+primaryColor = "#1d428a"
+backgroundColor = "#0C0C0C"
+secondaryBackgroundColor = "#1A1A2E"
+textColor = "#FFFFFF"
+borderColor = "#2A2A3E"
+baseRadius = "12px"
+buttonRadius = "8px"
+showWidgetBorder = false
+showSidebarBorder = false
+linkUnderline = false
+
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+
+redColor = "#C8102E"
+greenColor = "#00A651"
+blueColor = "#1d428a"
+grayColor = "#6B7280"

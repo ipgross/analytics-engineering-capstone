@@ -1,0 +1,44 @@
+name: 'nba_betting_analytics'
+
+config-version: 2
+version: '0.1'
+
+profile: 'nba_betting_analytics'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests", "data-tests"]
+analysis-paths: ["analysis"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+    - "target"
+    - "dbt_modules"
+    - "logs"
+
+require-dbt-version: [">=1.0.0", "<2.0.0"]
+
+vars:
+  nba_current_season: '2025-26'
+  nba_rolling_window: 10
+
+models:
+  nba_betting_analytics:
+      +materialized: table
+      nba:
+        +tags: ['nba', 'capstone']
+        staging:
+          +materialized: view
+          +tags: ['nba', 'staging']
+        intermediate:
+          +materialized: incremental
+          +on_schema_change: 'append_new_columns'
+          +tags: ['nba', 'intermediate']
+        marts:
+          +materialized: table
+          +on_schema_change: 'append_new_columns'
+          +tags: ['nba', 'marts']
+        live:
+          +materialized: view
+          +tags: ['nba', 'live']

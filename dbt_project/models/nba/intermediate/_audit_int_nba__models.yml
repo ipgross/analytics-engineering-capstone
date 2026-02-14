@@ -1,0 +1,195 @@
+version: 2
+
+models:
+  - name: audit_int_nba__team_game_stats
+    description: >
+      Audit table for int_nba__team_game_stats (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - team_id
+    columns:
+      - name: game_date
+        description: "Date the game was played."
+        data_tests:
+          - not_null
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "BallDontLie unique team identifier."
+        data_tests:
+          - not_null
+      - name: est_possessions
+        description: "Estimated possessions: FGA + 0.475*FTA - OREB + TOV."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 50
+                max_value: 150
+      - name: off_rating
+        description: "Points per 100 possessions."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 60
+                max_value: 170
+      - name: def_rating
+        description: "Opponent points per 100 possessions."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 60
+                max_value: 170
+      - name: efg_pct
+        description: "Effective field goal percentage."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0.15
+                max_value: 0.85
+              config:
+                where: "efg_pct is not null"
+      - name: tov_pct
+        description: "Turnover percentage."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0.02
+                max_value: 0.40
+              config:
+                where: "tov_pct is not null"
+      - name: orb_pct
+        description: "Offensive rebound percentage."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0.05
+                max_value: 0.55
+              config:
+                where: "orb_pct is not null"
+      - name: ftr
+        description: "Free throw rate (FTA / FGA)."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0.05
+                max_value: 0.60
+              config:
+                where: "ftr is not null"
+
+  - name: audit_int_nba__consensus_lines
+    description: >
+      Audit table for int_nba__consensus_lines (WAP quality gate).
+      Contains only the current batch (game_date = current_date).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - event_id
+              - market_key
+              - side
+    columns:
+      - name: game_date
+        description: "Date the game is scheduled (Eastern time)."
+        data_tests:
+          - not_null
+      - name: event_id
+        description: "The Odds API unique event identifier."
+        data_tests:
+          - not_null
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: num_bookmakers
+        description: "Count of bookmakers offering this line."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 30
+
+  - name: audit_int_nba__game_betting_results
+    description: >
+      Audit table for int_nba__game_betting_results (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - market_key
+              - side
+    columns:
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+        data_tests:
+          - not_null
+      - name: market_key
+        description: "Betting market type: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: cover_result
+        description: "COVERED, MISSED, or PUSH for this bet."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+
+  - name: audit_int_nba__team_rolling_stats
+    description: >
+      Audit table for int_nba__team_rolling_stats (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - team_id
+
+  - name: audit_int_nba__player_rolling_stats
+    description: >
+      Audit table for int_nba__player_rolling_stats (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - player_id
+    columns:
+      - name: game_id
+        description: "BallDontLie unique game identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "BallDontLie unique player identifier."
+        data_tests:
+          - not_null
+      - name: game_score
+        description: "Hollinger Game Score for this game."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -20
+                max_value: 80

@@ -1,0 +1,137 @@
+version: 2
+
+exposures:
+  - name: streamlit_game_results
+    label: "Game Results Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Historical game results page in the Streamlit dashboard. Shows
+      completed games with final scores and all betting outcomes
+      (spread cover, moneyline, over/under) for historical analysis.
+    depends_on:
+      - ref('mart_nba__game_results')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit']
+
+  - name: streamlit_ats_records
+    label: "ATS Records Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Team Against the Spread records page. Shows SU, ATS, and O/U
+      records with home/away splits and season rankings for every team.
+    depends_on:
+      - ref('mart_nba__team_ats_records')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit']
+
+  - name: streamlit_team_matchup
+    label: "Team Matchup Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Head-to-head team matchup comparison page. Shows season averages
+      for all counting stats, shooting percentages, advanced metrics
+      (off/def rating), and home/away splits.
+    depends_on:
+      - ref('mart_nba__team_matchup_stats')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit']
+
+  - name: streamlit_game_predictions
+    label: "Game Predictions Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Upcoming game predictions page. Shows projected scores from L10
+      rolling averages, consensus lines, cover probabilities, expected
+      value, and 1-5 star bet ratings across spread, moneyline, and
+      total markets.
+    depends_on:
+      - ref('mart_nba__game_predictions')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit']
+
+  - name: streamlit_game_grades
+    label: "Game Grades Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Post-game performance grades page. Shows team and player grades
+      comparing actual stats to L10 rolling averages and season averages.
+      Surfaces the key factors that drove a cover or miss.
+    depends_on:
+      - ref('mart_nba__game_grades')
+      - ref('mart_nba__player_game_grades')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit']
+
+  - name: streamlit_live_scoreboard
+    label: "Live Scoreboard"
+    type: dashboard
+    maturity: medium
+    description: >
+      Live game scoreboard in the Streamlit dashboard. Shows real-time
+      scores, quarter breakdowns, game clock, and status during game
+      hours. Refreshes every minute.
+    depends_on:
+      - ref('live_nba__scoreboard')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit', 'live']
+
+  - name: streamlit_live_game_detail
+    label: "Live Game Detail Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Live game detail page combining scoreboard, team box scores,
+      player box scores, play-by-play feed, consensus spread, and
+      post-game grades/results for recently completed games.
+    depends_on:
+      - ref('live_nba__game_detail')
+      - ref('live_nba__player_box_scores')
+      - ref('live_nba__plays')
+      - ref('live_nba__game_results')
+      - ref('live_nba__game_grades')
+      - ref('live_nba__player_game_grades')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit', 'live']
+
+  - name: streamlit_live_odds
+    label: "Live Odds Page"
+    type: dashboard
+    maturity: medium
+    description: >
+      Live odds comparison and line movement page. Shows current
+      bookmaker prices with consensus lines, and historical line
+      movement charts from the append-only snapshot archive.
+    depends_on:
+      - ref('live_nba__odds_current')
+      - ref('live_nba__odds_movement')
+    owner:
+      name: ipgross
+      email: ipgross@dataexpert.io
+    config:
+      tags: ['capstone', 'nba', 'streamlit', 'live']

@@ -1,0 +1,175 @@
+version: 2
+
+sources:
+  - name: nba_cold
+    description: >
+      Historical cold-path tables loaded daily by Airflow DAGs.
+      System of record for all analytical models.
+      Events and odds come from The Odds API; games, box scores, and teams
+      come from the BallDontLie API.
+    database: DATAEXPERT_STUDENT
+    schema: ipgross
+    config:
+      freshness:
+        warn_after:
+          count: 36
+          period: hour
+        error_after:
+          count: 48
+          period: hour
+      loaded_at_field: ingested_at
+
+    tables:
+      - name: hist_nba_events
+        description: >
+          Game schedule/events from The Odds API. One row per (ds, event_id).
+          Loaded daily at 7am ET by nba_daily_events DAG.
+          Team names normalized at ingestion.
+        identifier: hist_nba_events
+        columns:
+          - name: ds
+            description: "Game date partition key (Eastern time)."
+          - name: event_id
+            description: "Unique event identifier from The Odds API."
+          - name: season
+            description: "NBA season string, e.g. '2024-25'."
+          - name: home_team
+            description: "Home team name (normalized at ingestion)."
+          - name: away_team
+            description: "Away team name (normalized at ingestion)."
+          - name: postponed
+            description: "TRUE if event had no matching game result in reconcile."
+          - name: commence_time_utc
+            description: "Scheduled game start time in UTC."
+          - name: commence_time_et
+            description: "Scheduled game start time in Eastern."
+
+      - name: hist_nba_odds_open
+        description: >
+          Morning-line opening odds from The Odds API. One row per
+          (ds, event_id, bookmaker_key, market_key, outcome_name).
+          Captures the opening line before games start.
+        identifier: hist_nba_odds_open
+        columns:
+          - name: ds
+            description: "Game date partition key (Eastern time)."
+          - name: event_id
+            description: "Odds API event identifier — joins to hist_nba_events."
+          - name: bookmaker_key
+            description: "Sportsbook identifier (fanduel, draftkings, betmgm, etc.)."
+          - name: market_key
+            description: "Bet market type: h2h, spreads, or totals."
+          - name: outcome_name
+            description: "Team name (for h2h/spreads) or Over/Under (for totals)."
+          - name: outcome_price
+            description: "American odds (e.g. -110, +150)."
+          - name: outcome_point
+            description: "Point spread or total line. NULL for h2h."
+
+      - name: hist_nba_games
+        description: >
+          Final game results from BallDontLie API. One row per (ds, game_id).
+          Loaded at 3am ET by nba_daily_reconcile DAG for previous day.
+          Only contains games with status='Final'.
+        identifier: hist_nba_games
+        columns:
+          - name: ds
+            description: "Game date partition key."
+          - name: game_id
+            description: "BallDontLie game identifier."
+          - name: home_team_name
+            description: "Home team full name from BallDontLie."
+          - name: visitor_team_name
+            description: "Visitor team full name from BallDontLie."
+          - name: home_team_score
+            description: "Home team final score."
+          - name: visitor_team_score
+            description: "Visitor team final score."
+
+      - name: hist_nba_player_box_scores
+        description: >
+          Player-level box scores from BallDontLie API. One row per
+          (ds, game_id, player_id). Raw player stats — aggregate to
+          team level in dbt intermediate layer.
+        identifier: hist_nba_player_box_scores
+        columns:
+          - name: ds
+            description: "Game date partition key."
+          - name: game_id
+            description: "BallDontLie game identifier."
+          - name: player_id
+            description: "BallDontLie player identifier."
+          - name: min
+            description: "Minutes played in MM:SS format."
+          - name: is_home
+            description: "TRUE if player's team is the home team."
+
+      - name: hist_nba_teams
+        description: >
+          NBA team reference data from BallDontLie API. 30 active teams.
+          Loaded manually via nba_teams_load DAG.
+        identifier: hist_nba_teams
+        config:
+          freshness: null
+        columns:
+          - name: team_id
+            description: "BallDontLie team identifier."
+          - name: full_name
+            description: "Full team name (e.g. 'Los Angeles Lakers')."
+          - name: abbreviation
+            description: "Three-letter abbreviation (e.g. 'LAL')."
+
+  - name: nba_live
+    description: >
+      Hot-path tables updated every 1-5 minutes by live Airflow DAGs
+      during game hours (11am-2am ET). Used for real-time dashboard views.
+      Freshness managed by Airflow, not dbt.
+    database: DATAEXPERT_STUDENT
+    schema: ipgross
+    config:
+      freshness: null
+
+    tables:
+      - name: live_nba_scoreboard
+        description: >
+          Live game scoreboard. One row per game_id. Includes scheduled,
+          in-progress, and final games. Updated every 1 minute.
+        identifier: live_nba_scoreboard
+        columns:
+          - name: game_id
+            description: "BallDontLie game identifier (primary key)."
+          - name: status
+            description: "Game status: Scheduled time string, In Progress, or Final."
+          - name: period
+            description: "Current quarter (1-4) or overtime period."
+          - name: clock
+            description: "Game clock remaining (e.g. '5:32')."
+
+      - name: live_nba_player_box_scores
+        description: >
+          Live player box scores. One row per (game_id, player_id).
+          Updated every 1 minute for in-progress and final games.
+        identifier: live_nba_player_box_scores
+
+      - name: live_nba_plays
+        description: >
+          Play-by-play events. One row per (game_id, play_id).
+          Only for 2025+ season games. Insert-once (immutable).
+        identifier: live_nba_plays
+
+      - name: live_nba_odds
+        description: >
+          Current odds from The Odds API. One row per
+          (event_id, bookmaker_key, market_key, outcome_name).
+          Updated every 5 minutes. Completed games persist
+          (MERGE never deletes).
+        identifier: live_nba_odds
+
+      - name: archive_nba_odds_snapshots
+        description: >
+          Append-only snapshots of live odds taken every 5 minutes.
+          Powers the line movement chart. No primary key.
+        identifier: archive_nba_odds_snapshots
+        columns:
+          - name: snapshot_time
+            description: "Timestamp when this snapshot was captured."

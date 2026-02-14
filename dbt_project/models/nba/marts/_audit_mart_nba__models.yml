@@ -1,0 +1,247 @@
+version: 2
+
+models:
+  - name: audit_mart_nba__game_results
+    description: >
+      Audit table for mart_nba__game_results (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: game_date
+        description: "Date the game was played."
+        data_tests:
+          - not_null
+      - name: season
+        description: "NBA season identifier (e.g. 2024-25)."
+        data_tests:
+          - not_null
+      - name: winner
+        description: "Full name of the winning team, or TIE."
+        data_tests:
+          - not_null
+      - name: home_spread_result
+        description: "COVERED, MISSED, or PUSH for home team ATS."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "home_spread_result is not null"
+      - name: away_spread_result
+        description: "COVERED, MISSED, or PUSH for away team ATS."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "away_spread_result is not null"
+      - name: over_result
+        description: "COVERED (over hit), MISSED (under hit), or PUSH."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "over_result is not null"
+      - name: home_ml_result
+        description: "COVERED or MISSED for home team moneyline."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED']
+              config:
+                where: "home_ml_result is not null"
+      - name: away_ml_result
+        description: "COVERED or MISSED for away team moneyline."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED']
+              config:
+                where: "away_ml_result is not null"
+
+  - name: audit_mart_nba__game_grades
+    description: >
+      Audit table for mart_nba__game_grades (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - team_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "BallDontLie team identifier."
+        data_tests:
+          - not_null
+      - name: spread_result
+        description: "COVERED, MISSED, or PUSH for this team."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "spread_result is not null"
+      - name: ml_result
+        description: "COVERED or MISSED for this team's moneyline."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED']
+              config:
+                where: "ml_result is not null"
+      - name: over_result
+        description: "COVERED (over hit), MISSED (under hit), or PUSH."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "over_result is not null"
+      - name: off_performance_grade
+        description: "Letter grade A+ through F based on off_rating delta vs L10."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A+', 'A', 'B', 'C', 'D', 'F']
+      - name: def_performance_grade
+        description: "Letter grade A+ through F based on inverted def_rating delta vs L10."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A+', 'A', 'B', 'C', 'D', 'F']
+      - name: performance_grade
+        description: "Hybrid letter grade based on average of off and inverted def rating deltas vs L10."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A+', 'A', 'B', 'C', 'D', 'F']
+
+  - name: audit_mart_nba__game_predictions
+    description: >
+      Audit table for mart_nba__game_predictions (WAP quality gate).
+      Contains predictions for all currently unplayed games.
+      Tests run here before data is published to the incremental production table.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - event_id
+              - market_key
+              - side
+    columns:
+      - name: event_id
+        description: "The Odds API event identifier."
+        data_tests:
+          - not_null
+      - name: game_date
+        description: "Scheduled date of the game."
+        data_tests:
+          - not_null
+      - name: market_key
+        description: "Betting market: h2h, spreads, or totals."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['h2h', 'spreads', 'totals']
+      - name: cover_probability
+        description: "Composite cover probability from research-backed signals."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+              config:
+                where: "cover_probability is not null"
+      - name: projected_home_score
+        description: "Model-projected home team score."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 70
+                max_value: 150
+              config:
+                where: "projected_home_score is not null"
+      - name: projected_away_score
+        description: "Model-projected away team score."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 70
+                max_value: 150
+              config:
+                where: "projected_away_score is not null"
+      - name: bet_rating
+        description: "1-5 star rating based on EV thresholds."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+
+  - name: audit_mart_nba__player_game_grades
+    description: >
+      Audit table for mart_nba__player_game_grades (WAP quality gate).
+      Contains only the current batch (game_date = current_date - 1).
+      Tests run here before data is published to production.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_date
+              - game_id
+              - player_id
+    columns:
+      - name: game_id
+        description: "BallDontLie game identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "BallDontLie player identifier."
+        data_tests:
+          - not_null
+      - name: minutes_played
+        description: "Minutes played in this game."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 65
+      - name: game_score
+        description: "Hollinger Game Score."
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -20
+                max_value: 80
+      - name: spread_result
+        description: "COVERED, MISSED, or PUSH for this player's team."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['COVERED', 'MISSED', 'PUSH']
+              config:
+                where: "spread_result is not null"
+      - name: performance_grade
+        description: "Letter grade A+ through F based on Hollinger Game Score delta vs L10."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['A+', 'A', 'B', 'C', 'D', 'F']

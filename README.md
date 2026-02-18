@@ -25,7 +25,7 @@
 
 **THE COVER** is a production-grade analytics platform that ingests NBA betting odds and game data from two independent APIs, computes composite spread predictions backed by Dean Oliver's Four Factors, grades team and player performance against rolling baselines, and serves everything through a live dashboard that refreshes every 60 seconds.
 
-Most sports analytics platforms tell you *what happened*. This one tells you what *should* have happened, whether to bet on it, and grades the result — all with zero manual intervention. When a game goes Final, an event-driven trigger chain automatically reconciles historical data, rebuilds dbt models through a Write-Audit-Publish pipeline, and refreshes analytics marts within 10-20 minutes.
+Most sports analytics platforms tell you *what happened*. This one tells you what *should* have happened, whether to bet on it, and grades the result — all with zero manual intervention. When a game goes Final, an event-driven trigger chain automatically reconciles historical data, rebuilds dbt models through a Write-Audit-Publish pipeline, and refreshes analytics marts within 10 minutes.
 
 The system runs on a **dual hot/cold path architecture**: a cold path providing durable, audited historical records with full S3 archival and data quality gates, and a hot path delivering sub-minute live updates via direct MERGE FROM VALUES to Snowflake. Nine coordinated Airflow DAGs handle everything from daily batch ingestion to minute-by-minute live scoring, with cross-DAG sensors, event-driven triggers, and scheduled safety nets ensuring no data is ever lost.
 
